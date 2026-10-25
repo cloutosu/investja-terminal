@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Area, AreaChart, Bar, BarChart, Cell, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Activity } from 'lucide-react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { HistoryPoint } from '../types';
 import { useTheme } from '../lib/theme';
+import { EmptyState } from './EmptyState';
 
 export type ChartMode = 'equity' | 'earned';
 export type ChartRange = '1h' | '6h' | '24h';
@@ -89,7 +91,17 @@ export function EquityChart({ teamName, history, anchorEquity, mode, range, onSc
   const gid = `eq-${up ? 'u' : 'd'}`;
 
   if (points.length < 2) {
-    return <div className="flex h-full items-center justify-center text-sm text-ink-3">Collecting ticks… the line starts drawing after a couple of minutes of data.</div>;
+    return (
+      <div className="relative h-full">
+        <svg className="absolute inset-0 h-full w-full" aria-hidden>
+          {[0.2, 0.4, 0.6, 0.8].map((f) => <line key={f} x1="0" x2="100%" y1={`${f * 100}%`} y2={`${f * 100}%`} stroke={colors.grid} strokeDasharray="4 4" />)}
+          {[0.2, 0.4, 0.6, 0.8].map((f) => <line key={f} y1="0" y2="100%" x1={`${f * 100}%`} x2={`${f * 100}%`} stroke={colors.grid} strokeDasharray="4 4" />)}
+        </svg>
+        <div className="relative flex h-full items-center justify-center">
+          <EmptyState icon={Activity} title="Collecting ticks" hint="The line starts drawing after a couple of minutes of data." />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -103,6 +115,7 @@ export function EquityChart({ teamName, history, anchorEquity, mode, range, onSc
                 <stop offset="100%" stopColor={stroke} stopOpacity={0} />
               </linearGradient>
             </defs>
+            <CartesianGrid stroke={colors.grid} strokeDasharray="4 4" />
             <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} hide />
             <YAxis hide domain={domain} />
             {mode === 'earned' && <ReferenceLine y={0} stroke={colors.ink3} strokeDasharray="3 5" strokeOpacity={0.7} />}

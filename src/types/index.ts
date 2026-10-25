@@ -80,6 +80,9 @@ export interface DailyReportData {
 }
 export interface HistoryPoint {
   t: number;
+  /** your cash and loan at that minute (absent on older points) */
+  cash?: number;
+  loan?: number;
   /** team name -> [equity, rank] */
   eq: Record<string, [number, number]>;
 }

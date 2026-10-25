@@ -180,7 +180,7 @@ export async function ingest(store, live, now = Date.now(), target = 'Rahman Pow
   // history
   const tracked = await store.get('tracked', []);
   const names = new Set([...tracked, ...leaderboard.filter((t) => t.rank <= TOP_N).map((t) => t.name)]);
-  const point = { t: now, eq: {} };
+  const point = { t: now, eq: {}, cash: dashboard.cash, loan: dashboard.loan };
   for (const t of leaderboard) if (names.has(t.name)) point.eq[t.name] = [t.equity, t.rank];
   point.eq[target] = [equity, leaderboard.find((t) => t.name === target)?.rank ?? 0];
   await store.set('history', thin([...(await store.get('history', [])), point], now));

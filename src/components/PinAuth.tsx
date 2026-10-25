@@ -84,7 +84,6 @@ export function PinAuth({ onUnlock }: { onUnlock: (role: Role) => void }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
     >
-      <div className="ambient" />
       <motion.div animate={shake} className="relative z-10 w-full max-w-sm rounded-[32px] border border-line-strong bg-elevated p-8 shadow-2xl shadow-black/30">
         <div className="label mb-1">InvestJA Terminal</div>
         <h1 className="mb-8 text-2xl font-medium tracking-tight">{stage === 'sequence' ? 'Access granted' : 'Enter access code'}</h1>

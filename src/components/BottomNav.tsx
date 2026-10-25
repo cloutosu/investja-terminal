@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Clock, House, Lock, Trophy } from 'lucide-react';
+import { Clock, House, Lock, Plus, Trophy } from 'lucide-react';
 
 export type Tab = 'home' | 'board' | 'report';
 interface Props { tab: Tab; onTab: (t: Tab) => void; onLock: () => void; onTrade?: () => void }
@@ -25,8 +25,8 @@ export function BottomNav({ tab, onTab, onLock, onTrade }: Props) {
       {cell(items[0])}
       {cell(items[1])}
       {onTrade && (
-        <motion.button whileTap={{ scale: 0.92 }} onClick={onTrade} aria-label="New trade" className="orb relative -my-5 h-16 w-16 rounded-full border border-line-focus bg-elevated-2 p-1.5">
-          <span className="block h-full w-full rounded-full" style={{ background: 'radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 60%, white), var(--accent) 55%, color-mix(in srgb, var(--accent) 50%, black))' }} />
+        <motion.button whileTap={{ scale: 0.92 }} onClick={onTrade} aria-label="New trade" className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-ink">
+          <Plus size={20} />
         </motion.button>
       )}
       {cell(items[2])}

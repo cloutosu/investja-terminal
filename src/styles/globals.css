@@ -28,16 +28,15 @@
   --text-hero--line-height: 1;
 }
 
-/* Ember: dark, orange glow */
+/* Night: solid near-black, neutral greys */
 :root, [data-theme='ember'] {
   color-scheme: dark;
-  --bg: #0b0608; --surface: #140b0d; --surface-2: #1c1013;
-  --ink: #f7ede8; --ink-2: #b8a59d; --ink-3: #78645e;
-  --line: rgb(255 232 220 / 0.07); --line-strong: rgb(255 232 220 / 0.13); --line-focus: rgb(255 232 220 / 0.28);
-  --tint: rgb(255 232 220 / 0.045); --tint-2: rgb(255 232 220 / 0.09);
-  --accent: #f26b1d; --accent-ink: #190a04; --on-color: #120905;
-  --gain: #3ddc97; --loss: #ff5a5f; --warn: #ffb020;
-  --glow-a: rgb(242 107 29 / 0.34); --glow-b: rgb(170 40 25 / 0.28);
+  --bg: #09090b; --surface: #121212; --surface-2: #18181b;
+  --ink: #ededed; --ink-2: #a1a1aa; --ink-3: #52525b;
+  --line: rgb(255 255 255 / 0.06); --line-strong: rgb(255 255 255 / 0.1); --line-focus: rgb(255 255 255 / 0.2);
+  --tint: rgb(255 255 255 / 0.04); --tint-2: rgb(255 255 255 / 0.08);
+  --accent: #ededed; --accent-ink: #09090b; --on-color: #09090b;
+  --gain: #10b981; --loss: #ef4444; --warn: #f59e0b;
 }
 /* Frost: light glass */
 [data-theme='frost'] {
@@ -48,7 +47,6 @@
   --tint: rgb(20 25 27 / 0.04); --tint-2: rgb(20 25 27 / 0.08);
   --accent: #1a2123; --accent-ink: #ffffff; --on-color: #ffffff;
   --gain: #12906a; --loss: #d1453f; --warn: #b87a0a;
-  --glow-a: rgb(255 255 255 / 0.95); --glow-b: rgb(140 158 170 / 0.35);
 }
 /* Dune: warm cream */
 [data-theme='dune'] {
@@ -59,7 +57,6 @@
   --tint: rgb(42 23 15 / 0.045); --tint-2: rgb(42 23 15 / 0.09);
   --accent: #2a130c; --accent-ink: #fbefe8; --on-color: #ffffff;
   --gain: #3f8f4f; --loss: #b6403c; --warn: #b0741a;
-  --glow-a: rgb(232 190 150 / 0.65); --glow-b: rgb(244 214 205 / 0.7);
 }
 
 @layer base {
@@ -84,8 +81,8 @@
 
 @layer components {
   .num { font-family: var(--font-mono); font-feature-settings: 'tnum' 1, 'zero' 1; }
-  /* big proportional numerals, tabular so the digits don't jitter while they tween */
-  .numx { font-feature-settings: 'tnum' 1, 'zero' 1; letter-spacing: -0.035em; font-weight: 500; }
+  /* large figures: JetBrains Mono, tabular so digits don't jitter while they tween */
+  .numx { font-family: var(--font-mono); font-feature-settings: 'tnum' 1, 'zero' 1; letter-spacing: -0.04em; font-weight: 500; }
   .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; }
   .field {
@@ -107,20 +104,11 @@
   .btn-primary:active { transform: scale(0.97); }
 }
 
-.ambient {
-  position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
-}
-.ambient::before, .ambient::after {
-  content: ''; position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(60px);
-}
-.ambient::before { right: -25vmax; top: -30vmax; background: radial-gradient(closest-side, var(--glow-a), transparent); animation: drift 28s ease-in-out infinite alternate; }
-.ambient::after { left: -30vmax; bottom: -35vmax; background: radial-gradient(closest-side, var(--glow-b), transparent); animation: drift 34s ease-in-out infinite alternate-reverse; }
-@keyframes drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-4vmax, 3vmax, 0) scale(1.08); } }
 
+@keyframes breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
+.breathe { animation: breathe 2.4s ease-in-out infinite; }
 @keyframes chev { 0% { opacity: 0.25; transform: translateX(-3px); } 50% { opacity: 1; } 100% { opacity: 0.25; transform: translateX(3px); } }
 .chev { animation: chev 1.4s ease-in-out infinite; }
-@keyframes orb { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 0 10px transparent; } }
-.orb { animation: orb 2.4s ease-out infinite; }
 @keyframes sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .sheen-text {
   background: linear-gradient(100deg, var(--ink-3) 35%, var(--ink) 50%, var(--ink-3) 65%);
@@ -129,5 +117,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ambient::before, .ambient::after, .chev, .orb, .sheen-text { animation: none; }
+  .chev, .sheen-text, .breathe { animation: none; }
 }

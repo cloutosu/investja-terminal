@@ -19,7 +19,7 @@ const Row = memo(function Row({ team, isMe, animate, onOpen }: RowProps) {
       <td className="num w-9 pl-2 text-xs text-ink-3 sm:w-14 sm:pl-4 sm:text-[inherit]">{int(team.rank)}</td>
       <td className="max-w-[8.5rem] truncate pr-2 text-ink sm:max-w-56 sm:pr-4">
         {team.name}
-        {isMe && <span className="num ml-1.5 rounded-full border px-1.5 py-px text-label sm:ml-2 sm:px-2 text-accent-ink bg-accent border-transparent">YOU</span>}
+        {isMe && <span className="num ml-1.5 rounded-full border px-1.5 py-px text-label sm:ml-2 sm:px-2 border-gain/20 bg-gain/10 text-gain">YOU</span>}
       </td>
       <td className="hidden max-w-48 truncate pr-4 text-ink-3 md:table-cell">{team.school}</td>
       <td className="num pr-2 text-right text-xs text-ink sm:pr-4 sm:text-sm">{money(team.equity)}</td>

@@ -155,8 +155,6 @@ export default function App() {
   return (
     <>
       <AnimatePresence>{!role && <PinAuth key="pin" onUnlock={setRole} />}</AnimatePresence>
-
-      <div className="ambient" />
       {role && (
         <motion.div
           className="relative z-10 mx-auto flex max-w-[1400px] flex-col gap-5 px-4 pt-3 pb-32 sm:px-6 lg:gap-6 lg:pb-10"

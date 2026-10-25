@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Activity } from 'lucide-react';
 import type { MoverKey, MoverRow, MoversData } from '../types';
 import { money, signedMoney, signedPct } from '../lib/format';
+import { EmptyState } from './EmptyState';
 import { Toggle } from './Toggle';
 
 const KEYS: MoverKey[] = ['1m', '5m', '15m', '1h', '6h', '24h'];
@@ -27,7 +29,7 @@ function List({ title, rows, gain, onOpen, myTeam }: { title: string; rows: Move
                 <span className="num relative w-8 text-xs text-ink-3">{r.rank}</span>
                 <span className="relative min-w-0 flex-1 truncate text-ink">
                   {r.name}
-                  {r.name === myTeam && <span className="num ml-2 rounded-full bg-accent px-2 py-px text-label text-accent-ink">YOU</span>}
+                  {r.name === myTeam && <span className="num ml-2 rounded-full border border-gain/20 bg-gain/10 px-2 py-px text-label text-gain">YOU</span>}
                 </span>
                 <span className={`num relative text-xs ${gain ? 'text-gain' : 'text-loss'}`}>
                   {signedMoney(r.delta, Math.abs(r.delta) >= 1000 ? 0 : 2)} <span className="text-ink-3">{signedPct(r.pct)}</span>
@@ -52,9 +54,7 @@ export function MoversPanel({ movers, myTeam, onOpenTeam }: { movers: MoversData
         <Toggle id="movers" value={key} onChange={setKey} options={KEYS.map((k) => ({ id: k, label: k }))} />
       </div>
       {!w || !w.ready ? (
-        <p className="py-6 text-center text-sm text-ink-3">
-          Building the {key} baseline. Windows fill in as the server collects data (the 24h view needs a full day).
-        </p>
+        <EmptyState icon={Activity} title={`Building the ${key} baseline`} hint="Windows fill in as the server collects data. The 24h view needs a full day." />
       ) : (
         <div className="flex flex-col gap-5">
           {w.me && (

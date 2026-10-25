@@ -14,7 +14,7 @@ browser ──► /api/* (Netlify Functions) ──► investja.org
 - **Charts** for your equity or earnings (equity minus the day's start), per minute for the last 2 hours and per 5 minutes up to 24 hours, with a bar strip of change per tick. Open any team for the same chart plus a +5%/day projection.
 - **Movement panel**: biggest gainers and losers over 1m, 5m, 15m, 1h, 6h and 24h, plus your own movement in each window.
 - **Lock screen**: the code is checked by the server, not the browser. Two codes: `ACCESS_CODE` can trade, `VIEW_CODE` (optional) is read-only, so friends can watch without being able to touch your account. Six wrong tries lock that IP for 15 minutes.
-- Three themes (Ember, Frost, Dune), desktop and phone layouts, daily report, threat radar.
+- Three themes (Night, Frost, Dune), all solid colours, desktop and phone layouts, daily report, threat radar.
 
 ## Deploy on Netlify
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, Lock, Plus } from 'lucide-react';
 import type { HistoryPoint, MoverKey, MoverRow, Pulse } from '../types';
@@ -6,6 +6,7 @@ import { int, money, signedMoney, signedPct } from '../lib/format';
 import { etParts, etTime } from '../lib/market';
 import { setTheme, THEMES, useTheme, type ThemeId } from '../lib/theme';
 import { AnimatedNumber } from './AnimatedNumber';
+import { Sparkline } from './Sparkline';
 import { EquityChart, type ChartMode, type ChartPoint, type ChartRange } from './EquityChart';
 import type { TradeInit } from './TradeModal';
 
@@ -46,7 +47,7 @@ export function ThemeDots() {
           title={THEMES[t].label}
           onClick={() => setTheme(t)}
           className={`h-5 w-5 rounded-full border transition-transform ${id === t ? 'scale-110 border-line-focus' : 'border-transparent opacity-70 hover:opacity-100'}`}
-          style={{ background: t === 'ember' ? 'linear-gradient(135deg,#f26b1d,#3a0f0c)' : t === 'frost' ? 'linear-gradient(135deg,#ffffff,#9aa8b2)' : 'linear-gradient(135deg,#f3d9c8,#c9a48f)' }}
+          style={{ background: t === 'ember' ? '#27272a' : t === 'frost' ? '#d3d9de' : '#e6d6cf' }}
         />
       ))}
     </div>
@@ -66,44 +67,69 @@ function Toggle<T extends string>({ value, options, onChange }: { value: T; opti
   );
 }
 
-function Action({ icon, label, onClick, primary }: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean }) {
+function Action({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
-    <motion.button whileTap={{ scale: 0.94 }} onClick={onClick} className="group flex flex-col items-center gap-2">
-      <span className={`flex h-14 w-14 items-center justify-center rounded-full border transition-colors sm:h-16 sm:w-16 ${primary ? 'border-transparent bg-accent text-accent-ink' : 'border-line-strong bg-tint text-ink group-hover:bg-tint-2'}`}>
-        {icon}
-      </span>
-      <span className="text-xs text-ink-2">{label}</span>
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-line-strong bg-transparent px-4 py-2.5 text-sm text-ink transition-colors hover:bg-tint sm:flex-none sm:px-6"
+    >
+      {icon}
+      {label}
     </motion.button>
   );
 }
 
 export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, positions, live, marketOpen, pulse, history, mine, canTrade, onTrade, onLock }: Props) {
   const { colors } = useTheme();
-  const glow = useAnimationControls();
+  const border = useAnimationControls();
+  const cardRef = useRef<HTMLElement>(null);
   const color = useAnimationControls();
   const [floater, setFloater] = useState<Pulse | null>(null);
   const [mode, setMode] = useState<ChartMode>('equity');
   const [range, setRange] = useState<ChartRange>('1h');
   const [scrub, setScrub] = useState<ChartPoint | null>(null);
-  const [flashSign, setFlashSign] = useState(1);
 
   useEffect(() => {
     if (!pulse) return;
     const gain = pulse.delta > 0;
     const accent = gain ? colors.gain : colors.loss;
-    setFlashSign(gain ? 1 : -1);
-    void glow.start({ opacity: [0, 1, 0], transition: { duration: 1.2, times: [0, 0.2, 1] } });
+    const idle = cardRef.current ? getComputedStyle(cardRef.current).borderTopColor : 'rgba(255,255,255,0.06)';
+    void border.start({ borderColor: [idle, `${accent}80`, idle], transition: { duration: 1.1, times: [0, 0.2, 1] } });
     void color.start({ color: [accent, accent, colors.ink], transition: { duration: 0.8, times: [0, 0.15, 1] } });
     setFloater(pulse);
     const t = setTimeout(() => setFloater(null), 1500);
     return () => clearTimeout(t);
-  }, [pulse, glow, color, colors]);
+  }, [pulse, border, color, colors]);
 
   const buyingPower = cash + (MAX_LOAN - loan);
   const loanPct = Math.min(100, (loan / MAX_LOAN) * 100);
   const loanHot = loan >= 45000;
   const shownValue = scrub ? scrub.value : mode === 'earned' ? (dayDelta?.dollar ?? 0) : equity;
   const isEarned = mode === 'earned';
+
+  // last hour of each metric, from the server's per-minute history (flat until a trade moves it)
+  const series = useMemo(() => {
+    const end = history.at(-1)?.t ?? 0;
+    const hour = history.filter((p) => p.t >= end - 3600e3 && p.cash !== undefined && p.loan !== undefined);
+    return {
+      cash: hour.map((p) => p.cash as number),
+      loan: hour.map((p) => p.loan as number),
+      power: hour.map((p) => (p.cash as number) + (MAX_LOAN - (p.loan as number))),
+    };
+  }, [history]);
+  const trend = (vals: number[], now: number, goodWhenUp: boolean) => {
+    const v = vals.length >= 2 ? vals : [now, now];
+    const d = v[v.length - 1] - v[0];
+    const color = Math.abs(d) < 0.005 ? colors.ink3 : (d > 0) === goodWhenUp ? colors.gain : colors.loss;
+    return { values: v, color };
+  };
+  const kpis: { label: string; value: string; hot?: boolean; loanBar?: boolean; spark?: { values: number[]; color: string } }[] = [
+    { label: 'Cash', value: money(cash), spark: trend(series.cash, cash, true) },
+    { label: 'Loan', value: money(loan), hot: loanHot, loanBar: true, spark: trend(series.loan, loan, false) },
+    { label: 'Buying power', value: money(buyingPower), spark: trend(series.power, buyingPower, true) },
+    { label: 'Positions', value: int(positions) },
+  ];
 
   return (
     <header className="flex flex-col gap-5">
@@ -127,19 +153,13 @@ export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, p
       </div>
 
       <motion.section
+        ref={cardRef}
         className="card relative overflow-hidden p-5 sm:p-8"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full opacity-60 blur-3xl" style={{ background: 'radial-gradient(closest-side, var(--glow-a), transparent)' }} />
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={glow}
-          className="pointer-events-none absolute inset-0"
-          style={{ background: `radial-gradient(70% 90% at 30% 0%, color-mix(in srgb, var(${flashSign > 0 ? '--gain' : '--loss'}) 26%, transparent), transparent)` }}
-        />
-
+        <motion.div animate={border} initial={false} className="pointer-events-none absolute inset-0 rounded-[24px] border border-transparent" />
         <div className="relative flex flex-wrap items-center justify-between gap-3">
           <Toggle value={mode} onChange={setMode} options={[{ id: 'equity', label: 'Equity' }, { id: 'earned', label: 'Earned today' }]} />
           <Toggle value={range} onChange={setRange} options={(['1h', '6h', '24h'] as ChartRange[]).map((r) => ({ id: r, label: r.toUpperCase() }))} />
@@ -185,7 +205,7 @@ export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, p
           {(['1m', '5m', '15m', '1h', '6h', '24h'] as MoverKey[]).map((k) => {
             const m = mine[k];
             return (
-              <div key={k} className="rounded-2xl border border-line bg-tint px-3 py-2">
+              <div key={k} className="rounded-lg border border-line bg-tint px-3 py-2">
                 <div className="label">{k}</div>
                 <div className={`num mt-1 text-xs ${!m ? 'text-ink-3' : m.delta > 0 ? 'text-gain' : m.delta < 0 ? 'text-loss' : 'text-ink-3'}`}>
                   {m ? signedMoney(m.delta, Math.abs(m.delta) >= 1000 ? 0 : 2) : '—'}
@@ -195,25 +215,25 @@ export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, p
           })}
         </div>
         {canTrade && (
-        <div className="relative mt-6 flex items-start justify-around sm:justify-center sm:gap-12">
-          <Action primary icon={<ArrowUpRight size={22} />} label="Buy" onClick={() => onTrade({ action: 'buy' })} />
-          <Action icon={<ArrowDownLeft size={22} />} label="Sell" onClick={() => onTrade({ action: 'sell' })} />
-          <Action icon={<CalendarClock size={21} />} label="Schedule" onClick={() => onTrade({ mode: 'schedule' })} />
-        </div>
+          <div className="relative mt-5 flex gap-2 sm:justify-start">
+            <Action icon={<ArrowUpRight size={16} />} label="Buy" onClick={() => onTrade({ action: 'buy' })} />
+            <Action icon={<ArrowDownLeft size={16} />} label="Sell" onClick={() => onTrade({ action: 'sell' })} />
+            <Action icon={<CalendarClock size={16} />} label="Schedule" onClick={() => onTrade({ mode: 'schedule' })} />
+          </div>
         )}
       </motion.section>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {[
-          { label: 'Cash', value: money(cash), extra: null },
-          { label: 'Loan', value: money(loan), extra: <div className="mt-3 h-1 overflow-hidden rounded-full bg-tint-2"><motion.div className={`h-full rounded-full ${loanHot ? 'bg-loss' : 'bg-ink-3'}`} initial={{ width: 0 }} animate={{ width: `${loanPct}%` }} transition={{ duration: 0.8 }} /></div>, hot: loanHot },
-          { label: 'Buying power', value: money(buyingPower), extra: null },
-          { label: 'Positions', value: int(positions), extra: null },
-        ].map((k, i) => (
-          <motion.div key={k.label} className="card p-4 sm:p-5" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.05, duration: 0.4 }}>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {kpis.map((k, i) => (
+          <motion.div key={k.label} className="card p-3 sm:p-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.05, duration: 0.4 }}>
             <div className="label">{k.label}</div>
-            <div className={`numx mt-2 text-xl sm:text-2xl ${'hot' in k && k.hot ? 'text-loss' : 'text-ink'}`}>{k.value}</div>
-            {k.extra}
+            <div className={`numx mt-1 text-lg sm:text-xl ${k.hot ? 'text-loss' : 'text-ink'}`}>{k.value}</div>
+            {k.loanBar && (
+              <div className="mt-2 h-0.5 overflow-hidden bg-loss/10" role="progressbar" aria-valuenow={Math.round(loanPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Loan used of $50,000">
+                <motion.div className="h-full bg-loss" initial={{ width: 0 }} animate={{ width: `${loanPct}%` }} transition={{ duration: 0.8 }} />
+              </div>
+            )}
+            {k.spark && <div className="mt-2"><Sparkline values={k.spark.values} color={k.spark.color} /></div>}
           </motion.div>
         ))}
       </div>

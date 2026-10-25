@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DailyReportData, DayAnchor, Holding, Snapshot, TeamWithDelta } from '../types';
+import type { DailyReportData, DayAnchor, HistoryPoint, Snapshot, TeamWithDelta } from '../types';
 
 class InvestJADB extends Dexie {
   snapshots!: Table<Snapshot, number>;
@@ -22,10 +22,8 @@ export const db = new InvestJADB();
 const FIVE_SEC_WINDOW = 2 * 60 * 60 * 1000;
 const MINUTE_WINDOW = 24 * 60 * 60 * 1000;
 const TRACK_KEY = 'investja.tracked';
-const TOP_N = 20;
-const PRUNE_EVERY = 60; // polls
 
-// Only the user's team, the top 20 and any team opened in HistoryModal are stored (~22 series, not 2,525).
+// Only the user's team, the top 20 and any team opened in HistoryModal are stored, not all 2,525.
 export function getTracked(): Set<string> {
   try {
     return new Set(JSON.parse(localStorage.getItem(TRACK_KEY) || '[]') as string[]);
@@ -41,21 +39,35 @@ export function trackTeam(name: string) {
   try { localStorage.setItem(TRACK_KEY, JSON.stringify([...s])); } catch { /* storage blocked */ }
 }
 
-let pollCount = 0;
-
-export async function recordSnapshots(teams: TeamWithDelta[], myName: string, myEquity?: number) {
-  const names = new Set<string>([myName, ...getTracked()]);
-  for (const t of teams) if (t.rank <= TOP_N) names.add(t.name);
-  const now = Date.now();
+// Own team + top 20 arrive pre-recorded in data.json (the scraper keeps 24 h, so charts exist
+// even when nobody had the page open). Import only what we don't have yet.
+export async function importHistory(history: HistoryPoint[], myName: string) {
+  const lastRow = await db.snapshots
+    .where('[teamName+timestamp]')
+    .between([myName, 0], [myName, Dexie.maxKey])
+    .last();
+  const last = lastRow?.timestamp ?? 0;
+  const fresh = history.filter((p) => p.t > last);
+  if (!fresh.length) return false;
   const rows: Snapshot[] = [];
-  for (const t of teams) {
-    if (names.has(t.name)) {
-      // own series uses the live portfolio equity so the hero number and its chart agree
-      rows.push({ teamName: t.name, timestamp: now, equity: t.name === myName && myEquity !== undefined ? myEquity : t.equity, rank: t.rank });
-    }
+  for (const p of fresh) {
+    for (const [teamName, [equity, rank]] of Object.entries(p.eq)) rows.push({ teamName, timestamp: p.t, equity, rank });
+  }
+  await db.snapshots.bulkAdd(rows);
+  await pruneSnapshots();
+  return true;
+}
+
+// Teams the user opened in HistoryModal that aren't in the scraper's top 20 are recorded per sync.
+export async function recordTracked(teams: TeamWithDelta[], timestamp: number) {
+  const rows: Snapshot[] = [];
+  for (const name of getTracked()) {
+    const t = teams.find((x) => x.name === name);
+    if (!t) continue;
+    const exists = await db.snapshots.where('[teamName+timestamp]').equals([name, timestamp]).count();
+    if (!exists) rows.push({ teamName: name, timestamp, equity: t.equity, rank: t.rank });
   }
   if (rows.length) await db.snapshots.bulkAdd(rows);
-  if (++pollCount % PRUNE_EVERY === 0) await pruneSnapshots();
 }
 
 // 5s resolution for 2h, thinned to one point per minute until 24h, then dropped.
@@ -78,12 +90,4 @@ export function readSnapshots(teamName: string, sinceMs: number) {
     .where('[teamName+timestamp]')
     .between([teamName, sinceMs], [teamName, Dexie.maxKey])
     .toArray();
-}
-
-export async function ensureDayAnchor(date: string, equity: number, holdings: Holding[]) {
-  const existing = await db.dayAnchors.get(date);
-  if (existing) return existing;
-  const anchor: DayAnchor = { date, equity, holdings };
-  await db.dayAnchors.put(anchor);
-  return anchor;
 }

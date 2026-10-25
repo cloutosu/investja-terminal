@@ -122,7 +122,7 @@ export function EquityChart({ teamName, anchorEquity, tick, mode, range, onScrub
             <XAxis dataKey="t" hide />
             <YAxis hide domain={[(m: number) => Math.min(m, -0.01), (m: number) => Math.max(m, 0.01)]} />
             <ReferenceLine y={0} stroke={colors.ink3} strokeOpacity={0.4} />
-            <Bar dataKey="d" isAnimationActive={false} radius={2}>
+            <Bar dataKey="d" isAnimationActive={false} radius={2} maxBarSize={8}>
               {bars.map((b) => <Cell key={b.t} fill={(b.d ?? 0) >= 0 ? colors.gain : colors.loss} fillOpacity={0.85} />)}
             </Bar>
           </BarChart>

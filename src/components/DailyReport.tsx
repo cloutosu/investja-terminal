@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DailyReportData, DayAnchor, Portfolio } from '../types';
-import { api } from '../lib/api';
+import { buildReport } from '../lib/report';
 import { db } from '../lib/db';
 import { etDayKey, etMinutes, etParts } from '../lib/market';
 import { money, signedMoney, signedPct, tone } from '../lib/format';
@@ -30,20 +30,14 @@ export function DailyReport({ portfolio, equity, anchor }: Props) {
 
   const generate = useCallback(async (manual: boolean) => {
     if (running.current || !portfolio || equity === null || !anchor) {
-      if (manual) toast('Report needs a live sync and a start-of-day snapshot first', 'warn');
+      if (manual) toast('Report needs a synced data.json first', 'warn');
       return;
     }
     running.current = true;
     setBusy(true);
     try {
       const date = etDayKey();
-      const report = await api.generateDailyReport({
-        date,
-        startEquity: anchor.equity,
-        endEquity: equity,
-        startHoldings: anchor.holdings,
-        endHoldings: portfolio.holdings,
-      });
+      const report = buildReport(date, anchor, equity, portfolio.holdings);
       await db.dailyReports.where('date').equals(date).delete();
       await db.dailyReports.add(report);
       setSelected(date);
@@ -98,7 +92,7 @@ export function DailyReport({ portfolio, equity, anchor }: Props) {
             Biggest drag:{' '}
             {report.biggestDrag ? <span className="text-ink">{report.biggestDrag.ticker} <span className="text-loss">({signedMoney(report.biggestDrag.amount)})</span></span> : '—'}
           </div>
-          <div className="text-ink-2">Trades: {report.buys} buy{report.buys === 1 ? '' : 's'}, {report.sells} sell{report.sells === 1 ? '' : 's'}</div>
+          <div className="text-ink-2">Position changes: {report.buys} buy{report.buys === 1 ? '' : 's'}, {report.sells} sell{report.sells === 1 ? '' : 's'}</div>
           <div className="mt-2 text-xs text-ink-3">{money(report.startEquity)} → {money(report.endEquity)}</div>
         </div>
       ) : (

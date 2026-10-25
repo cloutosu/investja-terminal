@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { DayAnchor, Portfolio, Pulse, Team, TeamWithDelta } from './types';
-import { api } from './lib/api';
+import type { AppData, DayAnchor, Portfolio, Pulse, TeamWithDelta } from './types';
+import { fetchData } from './lib/api';
 import { computeDeltas } from './lib/deltas';
-import { ensureDayAnchor, recordSnapshots, db } from './lib/db';
-import { etDayKey, isMarketOpen } from './lib/market';
+import { importHistory, recordTracked } from './lib/db';
+import { etTime, isMarketOpen } from './lib/market';
 import { PinAuth } from './components/PinAuth';
 import { TopBar } from './components/TopBar';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { Leaderboard } from './components/Leaderboard';
 import { PortfolioCard } from './components/PortfolioCard';
 import { HistoryModal } from './components/HistoryModal';
-import { TradeModal, type TradeInit } from './components/TradeModal';
-import { ScheduledTrades } from './components/ScheduledTrades';
 import { ThreatRadar } from './components/ThreatRadar';
 import { DailyReport } from './components/DailyReport';
 
 const TARGET_TEAM = import.meta.env.VITE_TARGET_TEAM || 'Rahman Power Squared';
 const AUTH_KEY = 'investja.auth';
-const POLL_MS = 5000;
-const IDLE_POLL_MS = 30000;
+const POLL_MS = 60_000;
 const PULSE_MS = 3000;
+const STALE_MS = 15 * 60_000; // GitHub's scheduler regularly runs late; past this we say so
 
 const portfolioEquity = (p: Portfolio) => p.holdings.reduce((s, h) => s + h.totalValue, 0) + p.cash - p.loan;
 
@@ -37,6 +35,11 @@ function attributeTicker(prev: Portfolio, next: Portfolio, direction: number): s
   return best?.ticker ?? null;
 }
 
+const ago = (ms: number) => {
+  const m = Math.max(0, Math.round(ms / 60000));
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`;
+};
+
 export default function App() {
   const [authed, setAuthed] = useState(() => {
     try { return sessionStorage.getItem(AUTH_KEY) === '1'; } catch { return false; }
@@ -44,71 +47,70 @@ export default function App() {
   const prevEquitiesRef = useRef<Map<string, number>>(new Map());
   const prevPortfolioRef = useRef<Portfolio | null>(null);
   const prevMyEquityRef = useRef<number | null>(null);
-  const inFlight = useRef(false);
+  const lastTs = useRef(0);
   const pulseSeq = useRef(0);
 
   const [teams, setTeams] = useState<TeamWithDelta[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [live, setLive] = useState(true);
   const [anchor, setAnchor] = useState<DayAnchor | null>(null);
+  const [syncedAt, setSyncedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [pulse, setPulse] = useState<Pulse | null>(null);
-  const [marketOpen, setMarketOpen] = useState(isMarketOpen());
   const [historyTeam, setHistoryTeam] = useState<string | null>(null);
-  const [trade, setTrade] = useState<TradeInit | null>(null);
-  const [scheduleTick, setScheduleTick] = useState(0);
   const [tick, setTick] = useState(0);
   const [tab, setTab] = useState<Tab>('home');
   const show = (t: Tab) => (tab === t ? '' : 'max-lg:hidden');
 
   const pollLiveData = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
     try {
-      const { leaderboard: lbRes, dashboard: dashRes } = await api.live();
-      console.log(`[poll] leaderboard: ${lbRes.length} teams, dashboard:`, { cash: dashRes.cash, loan: dashRes.loan });
+      const d: AppData = await fetchData();
+      setError(null);
+      if (d.timestamp === lastTs.current) return; // same scrape as last time
+      lastTs.current = d.timestamp;
+      console.log(`[poll] leaderboard: ${d.teams.length} teams, dashboard:`, { cash: d.portfolio.cash, loan: d.portfolio.loan });
 
-      const withDeltas = computeDeltas(lbRes, prevEquitiesRef.current);
-      prevEquitiesRef.current = new Map(lbRes.map((t: Team) => [t.name, t.equity]));
+      // first load: seed from the scraper's previous-run equities so deltas aren't all zero
+      if (prevEquitiesRef.current.size === 0) {
+        prevEquitiesRef.current = new Map(d.teams.flatMap((t) => (t.prevEquity !== undefined ? [[t.name, t.prevEquity] as [string, number]] : [])));
+      }
+      const withDeltas = computeDeltas(d.teams, prevEquitiesRef.current);
+      prevEquitiesRef.current = new Map(d.teams.map((t) => [t.name, t.equity]));
 
-      const myEquity = portfolioEquity(dashRes);
+      const myEquity = portfolioEquity(d.portfolio);
       const prevEq = prevMyEquityRef.current;
-      const prevPf = prevPortfolioRef.current;
       if (prevEq !== null && Math.abs(myEquity - prevEq) >= 0.005) {
         const delta = myEquity - prevEq;
-        setPulse({ id: ++pulseSeq.current, delta, ticker: prevPf ? attributeTicker(prevPf, dashRes, delta) : null });
+        const prevPf = prevPortfolioRef.current;
+        setPulse({ id: ++pulseSeq.current, delta, ticker: prevPf ? attributeTicker(prevPf, d.portfolio, delta) : null });
       }
       prevMyEquityRef.current = myEquity;
-      prevPortfolioRef.current = dashRes;
+      prevPortfolioRef.current = d.portfolio;
 
       setTeams(withDeltas);
-      setPortfolio(dashRes);
-      setLive(true);
-      setMarketOpen(isMarketOpen());
+      setPortfolio(d.portfolio);
+      setAnchor(d.anchor);
+      setSyncedAt(d.timestamp);
 
-      ensureDayAnchor(etDayKey(), myEquity, dashRes.holdings).then(setAnchor).catch(console.error);
-      recordSnapshots(withDeltas, TARGET_TEAM, myEquity).then(() => setTick((n) => n + 1)).catch(console.error);
+      await importHistory(d.history, TARGET_TEAM);
+      await recordTracked(withDeltas, d.timestamp);
+      setTick((n) => n + 1);
     } catch (e) {
       console.warn('[poll] failed:', (e as Error).message);
-      setLive(false);
-    } finally {
-      inFlight.current = false;
+      setError((e as Error).message);
     }
   }, []);
 
-  // Dev polls every 5 s. In production, idle (hidden tab / market closed) polls slow down so a
-  // single open tab stays inside serverless invocation limits.
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    let stopped = false;
-    const loop = async () => {
-      if (!(import.meta.env.PROD && document.hidden)) await pollLiveData();
-      if (stopped) return;
-      const slow = import.meta.env.PROD && (document.hidden || !isMarketOpen());
-      timer = setTimeout(loop, slow ? IDLE_POLL_MS : POLL_MS);
-    };
-    void loop();
-    return () => { stopped = true; clearTimeout(timer); };
+    void pollLiveData();
+    const interval = setInterval(pollLiveData, POLL_MS);
+    return () => clearInterval(interval);
   }, [pollLiveData]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!pulse) return;
@@ -116,17 +118,15 @@ export default function App() {
     return () => clearTimeout(t);
   }, [pulse]);
 
-  useEffect(() => {
-    db.dayAnchors.get(etDayKey()).then((a) => a && setAnchor(a)).catch(() => {});
-  }, []);
-
-  const myTeam = useMemo(() => teams.find((t) => t.name === TARGET_TEAM) ?? null, [teams]);
-  const equity = portfolio ? portfolioEquity(portfolio) : myTeam?.equity ?? null;
+  const equity = portfolio ? portfolioEquity(portfolio) : teams.find((t) => t.name === TARGET_TEAM)?.equity ?? null;
   const dayDelta = useMemo(() => {
     if (equity === null || !anchor) return null;
     const dollar = equity - anchor.equity;
     return { dollar, percent: anchor.equity > 0 ? (dollar / anchor.equity) * 100 : 0 };
   }, [equity, anchor]);
+
+  const age = syncedAt ? now - syncedAt : null;
+  const stale = age !== null && age > STALE_MS;
 
   const unlock = useCallback(() => {
     try { sessionStorage.setItem(AUTH_KEY, '1'); } catch { /* storage blocked */ }
@@ -144,11 +144,24 @@ export default function App() {
       <div className="ambient" />
       {authed && (
         <motion.div
-          className="relative z-10 mx-auto flex max-w-[1400px] flex-col gap-5 px-4 pt-5 pb-32 sm:px-6 lg:gap-6 lg:pb-10"
+          className="relative z-10 mx-auto flex max-w-[1400px] flex-col gap-5 px-4 pt-3 pb-32 sm:px-6 lg:gap-6 lg:pb-10"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
         >
+          <div className={`num flex flex-wrap items-center justify-center gap-x-3 rounded-full border px-4 py-1.5 text-center text-xs ${stale || error ? 'border-warn/30 text-warn' : 'border-line text-ink-3'}`}>
+            {error && !syncedAt ? (
+              <span>No data yet: {error}. The first scrape can take a few minutes after deploy.</span>
+            ) : (
+              <>
+                <span>Last synced via GitHub Actions: {syncedAt ? etTime(syncedAt) : '…'}</span>
+                {age !== null && <span>{ago(age)}</span>}
+                {stale && <span>· scheduler running late</span>}
+                {error && syncedAt && <span>· refresh failed</span>}
+              </>
+            )}
+          </div>
+
           <div className={tab === 'home' ? '' : 'max-lg:hidden'}>
             <TopBar
               teamName={TARGET_TEAM}
@@ -158,41 +171,29 @@ export default function App() {
               cash={portfolio?.cash ?? 0}
               loan={portfolio?.loan ?? 0}
               positions={portfolio?.holdings.length ?? 0}
-              live={live}
-              marketOpen={marketOpen}
+              live={!stale && !error && syncedAt !== null}
+              marketOpen={isMarketOpen(now)}
               pulse={pulse}
               tick={tick}
-              onTrade={setTrade}
               onLock={lock}
             />
           </div>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
             <div className="flex flex-col gap-5 lg:col-span-8 lg:gap-6">
-              <div className={show('home')}><PortfolioCard portfolio={portfolio} pulse={pulse} onSell={setTrade} /></div>
+              <div className={show('home')}><PortfolioCard portfolio={portfolio} pulse={pulse} /></div>
               <div className={show('board')}><Leaderboard teams={teams} myTeam={TARGET_TEAM} onOpenTeam={setHistoryTeam} /></div>
             </div>
             <div className="flex flex-col gap-5 lg:col-span-4 lg:gap-6">
               <div className={show('board')}><ThreatRadar teams={teams} myTeam={TARGET_TEAM} /></div>
-              <div className={show('activity')}><ScheduledTrades refreshKey={scheduleTick} /></div>
-              <div className={show('activity')}><DailyReport portfolio={portfolio} equity={equity} anchor={anchor} /></div>
+              <div className={show('report')}><DailyReport portfolio={portfolio} equity={equity} anchor={anchor} /></div>
             </div>
           </div>
-          <BottomNav tab={tab} onTab={setTab} onTrade={() => setTrade({})} onLock={lock} />
+          <BottomNav tab={tab} onTab={setTab} onLock={lock} />
         </motion.div>
       )}
 
       <AnimatePresence>
         {historyTeam && <HistoryModal key={historyTeam} teamName={historyTeam} onClose={() => setHistoryTeam(null)} />}
-        {trade && (
-          <TradeModal
-            key="trade"
-            portfolio={portfolio}
-            equity={equity}
-            init={trade}
-            onClose={() => setTrade(null)}
-            onDone={() => { void pollLiveData(); setScheduleTick((n) => n + 1); }}
-          />
-        )}
       </AnimatePresence>
     </>
   );

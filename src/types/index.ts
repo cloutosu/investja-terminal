@@ -2,8 +2,9 @@ export interface Team {
   rank: number;
   name: string;
   school: string;
-  location: string;
+  location?: string;
   equity: number;
+  prevEquity?: number;
 }
 export interface TeamWithDelta extends Team {
   deltaDollar: number;
@@ -21,28 +22,6 @@ export interface Portfolio {
   cash: number;
   loan: number;
   holdings: Holding[];
-}
-export type TradeAction = 'buy' | 'sell';
-export interface TradeBody {
-  action: TradeAction;
-  exchange: string;
-  ticker: string;
-  quantity: number;
-}
-export interface TradeResult {
-  success: boolean;
-  message: string;
-}
-export interface ScheduleBody extends TradeBody {
-  executeAt: number;
-}
-export interface ScheduledTrade extends ScheduleBody {
-  id: string;
-  createdAt: number;
-  attempts: number;
-  status: 'pending' | 'retrying' | 'failed';
-  lastError: string | null;
-  nextAttemptAt: number;
 }
 export interface Snapshot {
   id?: number;
@@ -73,12 +52,17 @@ export interface DailyReportData {
   sells: number;
   generatedAt: number;
 }
-export interface DailyReportRequest {
-  date: string;
-  startEquity: number;
-  endEquity: number;
-  startHoldings: Holding[];
-  endHoldings: Holding[];
+export interface HistoryPoint {
+  t: number;
+  /** team name -> [equity, rank] */
+  eq: Record<string, [number, number]>;
+}
+export interface AppData {
+  timestamp: number;
+  teams: Team[];
+  portfolio: Portfolio;
+  anchor: DayAnchor;
+  history: HistoryPoint[];
 }
 export interface Pulse {
   id: number;

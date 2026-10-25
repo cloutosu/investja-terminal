@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { ArrowDownLeft, ArrowUpRight, CalendarClock, Lock, Plus } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import type { Pulse } from '../types';
 import { int, money, signedMoney, signedPct } from '../lib/format';
 import { etParts, etTime } from '../lib/market';
 import { setTheme, THEMES, useTheme, type ThemeId } from '../lib/theme';
 import { AnimatedNumber } from './AnimatedNumber';
 import { EquityChart, type ChartMode, type ChartPoint, type ChartRange } from './EquityChart';
-import type { TradeInit } from './TradeModal';
 
 interface Props {
   teamName: string;
@@ -21,7 +20,6 @@ interface Props {
   marketOpen: boolean;
   pulse: Pulse | null;
   tick: number;
-  onTrade: (init: TradeInit) => void;
   onLock: () => void;
 }
 
@@ -64,18 +62,7 @@ function Toggle<T extends string>({ value, options, onChange }: { value: T; opti
   );
 }
 
-function Action({ icon, label, onClick, primary }: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean }) {
-  return (
-    <motion.button whileTap={{ scale: 0.94 }} onClick={onClick} className="group flex flex-col items-center gap-2">
-      <span className={`flex h-14 w-14 items-center justify-center rounded-full border transition-colors sm:h-16 sm:w-16 ${primary ? 'border-transparent bg-accent text-accent-ink' : 'border-line-strong bg-tint text-ink group-hover:bg-tint-2'}`}>
-        {icon}
-      </span>
-      <span className="text-xs text-ink-2">{label}</span>
-    </motion.button>
-  );
-}
-
-export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, positions, live, marketOpen, pulse, tick, onTrade, onLock }: Props) {
+export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, positions, live, marketOpen, pulse, tick, onLock }: Props) {
   const { colors } = useTheme();
   const glow = useAnimationControls();
   const color = useAnimationControls();
@@ -113,19 +100,18 @@ export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, p
         <div className="flex items-center gap-2 sm:gap-3">
           <span className="hidden items-center gap-2 text-label tracking-widest sm:flex">
             <motion.span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-gain' : 'bg-warn'}`} animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-            <span className={live ? 'text-ink-2' : 'text-warn'}>{live ? 'LIVE' : 'OFFLINE'}</span>
+            <span className={live ? 'text-ink-2' : 'text-warn'}>{live ? 'SYNCED' : 'STALE'}</span>
           </span>
           <span className={`hidden rounded-full border px-3 py-1 text-label tracking-widest sm:inline ${marketOpen ? 'border-line-strong text-ink-3' : 'border-warn/30 text-warn'}`}>
             {marketOpen ? 'MARKET OPEN' : 'MARKET CLOSED'}
           </span>
           <ThemeDots />
-          <button onClick={() => onTrade({})} className="btn-primary hidden items-center gap-2 lg:flex"><Plus size={14} />New trade</button>
           <button onClick={onLock} aria-label="Lock terminal" className="btn hidden items-center gap-2 lg:flex"><Lock size={13} />Lock</button>
         </div>
       </div>
 
       <motion.section
-        className="card relative overflow-hidden p-5 sm:p-8"
+        className="card relative overflow-hidden p-5 sm:p-8 sm:pb-6"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -179,11 +165,6 @@ export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, p
           <EquityChart teamName={teamName} anchorEquity={anchorEquity} tick={tick} mode={mode} range={range} onScrub={setScrub} />
         </div>
 
-        <div className="relative mt-6 flex items-start justify-around sm:justify-center sm:gap-12">
-          <Action primary icon={<ArrowUpRight size={22} />} label="Buy" onClick={() => onTrade({ action: 'buy' })} />
-          <Action icon={<ArrowDownLeft size={22} />} label="Sell" onClick={() => onTrade({ action: 'sell' })} />
-          <Action icon={<CalendarClock size={21} />} label="Schedule" onClick={() => onTrade({ mode: 'schedule' })} />
-        </div>
       </motion.section>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

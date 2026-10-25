@@ -99,8 +99,8 @@ export function PinAuth({ onUnlock }: { onUnlock: () => void }) {
                 </div>
               ))}
             </div>
-            <div className="num mb-6 h-4 text-xs text-ink-3">
-              {locked ? 'Too many failed attempts.' : attempts > 0 ? `Incorrect PIN. ${MAX_ATTEMPTS - attempts} left.` : ''}
+            <div className="num mb-6 min-h-4 text-xs text-ink-3">
+              {!PIN ? 'Set VITE_PIN in your host env vars, then redeploy.' : locked ? 'Too many failed attempts.' : attempts > 0 ? `Incorrect PIN. ${MAX_ATTEMPTS - attempts} left.` : ''}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {keys.map((k) => (

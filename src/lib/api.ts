@@ -2,7 +2,8 @@ import type {
   DailyReportData, DailyReportRequest, Portfolio, ScheduleBody, ScheduledTrade, Team, TradeBody, TradeResult,
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Dev talks to the Express proxy; a production build calls the Netlify Function on the same origin.
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
@@ -22,6 +23,8 @@ const json = (method: string, body: unknown): RequestInit => ({
 });
 
 export const api = {
+  // one login serves both pages: two parallel logins would invalidate each other's session
+  live: () => request<{ dashboard: Portfolio; leaderboard: Team[] }>('/api/live'),
   dashboard: () => request<Portfolio>('/api/dashboard'),
   leaderboard: () => request<Team[]>('/api/leaderboard'),
   trade: (body: TradeBody) => request<TradeResult>('/api/trade', json('POST', body)),

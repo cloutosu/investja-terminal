@@ -59,23 +59,24 @@ The repo is safe to make public: `.env` is gitignored and the examples hold plac
 
 The deployed site is not private, though. The PIN is checked in the browser and `VITE_PIN` is in the JS bundle. Anyone who knows your Render URL can read your portfolio and place trades through `/api/trade`. Share the Netlify link only with people you'd trust with the account, or add a server-side check before posting it widely.
 
-## Deploy
+## Deploy (Netlify only)
 
-### Frontend → Netlify
-1. New site from Git, pick this repo.
-2. Build command `npm run build`, publish directory `dist`.
-3. Env vars: `VITE_API_URL=https://<your-backend>.onrender.com`, `VITE_PIN=<your pin>`, `VITE_TARGET_TEAM=Rahman Power Squared`.
-4. Pushes to `main` auto-deploy.
+The proxy also ships as Netlify Functions in `netlify/functions/`, so the whole app is one Netlify site. No Render, no cron service.
 
-### Backend → Render
-1. New Web Service from the same repo, root directory `/`.
-2. Build command `npm install`, start command `node server.js`.
-3. Env vars: `USER`, `PASS`, `BASE_URL`, `PORT`, `FRONTEND_URL=https://<your-app>.netlify.app`.
-4. CORS only allows `http://localhost:5173` and `FRONTEND_URL`.
-5. Free tier sleeps after 15 min idle and `scheduled-trades.json` lives on ephemeral disk. A redeploy or restart wipes the queue. Use a persistent disk if the queue matters.
+1. New site from Git, pick this repo. Netlify reads `netlify.toml` (build `npm run build`, publish `dist`, functions in `netlify/functions`).
+2. Site configuration → Environment variables:
+   - `INVESTJA_USER`, `INVESTJA_PASS`: your investja login (used server-side only; never `VITE_`-prefixed).
+   - `VITE_PIN`, `VITE_TARGET_TEAM`: the PIN screen and the team to highlight.
+   - Leave `VITE_API_URL` unset: the production build calls `/api/*` on the same site.
+3. Deploy, then Trigger deploy → Clear cache and deploy site after any env change (`VITE_*` values are baked in at build time).
+4. Check `https://<site>.netlify.app/api/health`, then `/api/live`.
 
-### Cron → cron-job.org
-New job: `POST https://<your-backend>.onrender.com/api/run-scheduler-tick`, every 1 minute. It runs the scheduler and keeps Render awake.
+How it differs from local dev: each request does its own login (stateless), `/api/live` returns the dashboard and leaderboard from one login, the queue and trade log live in Netlify Blobs, and `tick.mjs` runs every minute on Netlify's scheduler to execute due trades. Overlapping ticks are guarded by a 90 s soft lock on each task.
+
+Limits: functions time out after about 10 s on the free plan, and every poll is an invocation. In production the frontend polls every 5 s only while the tab is visible and the market is open, and every 30 s otherwise. Several friends keeping tabs open all day can exhaust the free allowance. `Express server.js` (below) has no such limit.
+
+### Alternative: Express on Render
+`server.js` is the same proxy as a long-running server. Deploy it as a Render web service (`npm install`, `node server.js`, env `USER`, `PASS`, `BASE_URL`, `FRONTEND_URL`), set `VITE_API_URL` on the frontend to its URL, and POST `/api/run-scheduler-tick` every minute from cron-job.org. Free Render sleeps after 15 minutes idle.
 
 ## Mobile without hosting (Tailscale)
 

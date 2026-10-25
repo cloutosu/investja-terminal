@@ -19,6 +19,7 @@ import { DailyReport } from './components/DailyReport';
 const TARGET_TEAM = import.meta.env.VITE_TARGET_TEAM || 'Rahman Power Squared';
 const AUTH_KEY = 'investja.auth';
 const POLL_MS = 5000;
+const IDLE_POLL_MS = 30000;
 const PULSE_MS = 3000;
 
 const portfolioEquity = (p: Portfolio) => p.holdings.reduce((s, h) => s + h.totalValue, 0) + p.cash - p.loan;
@@ -63,7 +64,7 @@ export default function App() {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      const [lbRes, dashRes] = await Promise.all([api.leaderboard(), api.dashboard()]);
+      const { leaderboard: lbRes, dashboard: dashRes } = await api.live();
       console.log(`[poll] leaderboard: ${lbRes.length} teams, dashboard:`, { cash: dashRes.cash, loan: dashRes.loan });
 
       const withDeltas = computeDeltas(lbRes, prevEquitiesRef.current);
@@ -94,10 +95,19 @@ export default function App() {
     }
   }, []);
 
+  // Dev polls every 5 s. In production, idle (hidden tab / market closed) polls slow down so a
+  // single open tab stays inside serverless invocation limits.
   useEffect(() => {
-    void pollLiveData();
-    const interval = setInterval(pollLiveData, POLL_MS);
-    return () => clearInterval(interval);
+    let timer: ReturnType<typeof setTimeout>;
+    let stopped = false;
+    const loop = async () => {
+      if (!(import.meta.env.PROD && document.hidden)) await pollLiveData();
+      if (stopped) return;
+      const slow = import.meta.env.PROD && (document.hidden || !isMarketOpen());
+      timer = setTimeout(loop, slow ? IDLE_POLL_MS : POLL_MS);
+    };
+    void loop();
+    return () => { stopped = true; clearTimeout(timer); };
   }, [pollLiveData]);
 
   useEffect(() => {

@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Portfolio, Pulse } from '../types';
+import { HOLD_MS, etTime } from '../lib/market';
 import { int, money } from '../lib/format';
+import type { TradeInit } from './TradeModal';
 
-interface Props { portfolio: Portfolio | null; pulse: Pulse | null }
+const BUYS_KEY = 'investja.buys';
+export function readBuys(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(BUYS_KEY) || '{}'); } catch { return {}; }
+}
+export function recordBuy(ticker: string) {
+  try { localStorage.setItem(BUYS_KEY, JSON.stringify({ ...readBuys(), [ticker]: Date.now() })); } catch { /* storage blocked */ }
+}
 
-export function PortfolioCard({ portfolio, pulse }: Props) {
+interface Props { portfolio: Portfolio | null; pulse: Pulse | null; canTrade: boolean; onSell: (init: TradeInit) => void }
+
+export function PortfolioCard({ portfolio, pulse, canTrade, onSell }: Props) {
+  const [now, setNow] = useState(Date.now());
   const [dot, setDot] = useState<{ ticker: string; gain: boolean } | null>(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!pulse?.ticker) return;
@@ -20,6 +36,7 @@ export function PortfolioCard({ portfolio, pulse }: Props) {
   const cash = portfolio?.cash ?? 0;
   const loan = portfolio?.loan ?? 0;
   const equity = holdingsTotal + cash - loan;
+  const buys = readBuys();
 
   return (
     <section className="card p-5 sm:p-6">
@@ -52,6 +69,20 @@ export function PortfolioCard({ portfolio, pulse }: Props) {
                 <div className="num text-sm text-ink">{money(h.totalValue)}</div>
                 <div className="num text-xs text-ink-3">{money(h.currentPrice)} · {equity > 0 ? ((h.totalValue / equity) * 100).toFixed(0) : 0}%</div>
               </div>
+              {canTrade && (() => {
+                const holdUntil = (buys[h.ticker] ?? 0) + HOLD_MS;
+                const held = holdUntil > now;
+                return (
+                  <button
+                    className="btn ml-1"
+                    disabled={held}
+                    title={held ? `1-hour hold until ${etTime(holdUntil)}` : undefined}
+                    onClick={() => onSell({ action: 'sell', exchange: String(h.exchange), ticker: h.ticker, quantity: h.quantity })}
+                  >
+                    {held ? 'Held' : 'Sell all'}
+                  </button>
+                );
+              })()}
             </motion.li>
           ))}
         </AnimatePresence>

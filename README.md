@@ -1,55 +1,53 @@
 # InvestJA Terminal
 
-A read-only dashboard for an [investja.org](https://investja.org) team, hosted as a static site on GitHub Pages. No server.
+A bank-style dashboard and trade console for an [investja.org](https://investja.org) team. One Netlify site: a React frontend plus Netlify Functions that log in to investja.org, trade, and record history.
 
 ```
-GitHub Action (every 5 min)
-  1. scraper.js: log in to investja.org, scrape rankings + dashboard -> public/data.json
-  2. vite build (data.json is baked into the site)
-  3. deploy to GitHub Pages
-browser: fetches data.json every 60 s and renders it
+browser ──► /api/* (Netlify Functions) ──► investja.org
+              │  tick.mjs, every minute: run due trades, scrape, record history + movers
+              └─ Netlify Blobs: latest data, 24 h history, 5-min snapshots, trade queue, trade log
 ```
 
-The scrape and the deploy are one workflow (`.github/workflows/scrape.yml`). A commit-only workflow would not work: the site serves the `data.json` it was built with, and commits made by the Action don't trigger another deploy. Nothing is committed on each run, so the repo history stays clean.
+## Features
 
-## Setup (one time, about 2 minutes)
+- **Buy, sell and schedule** with swipe-to-confirm. The thumb turns into a ring, closes into a circle and draws a checkmark when the order fills. Scheduled orders retry every 5 minutes until the server accepts them (market closed, 1-hour hold).
+- **Charts** for your equity or earnings (equity minus the day's start), per minute for the last 2 hours and per 5 minutes up to 24 hours, with a bar strip of change per tick. Open any team for the same chart plus a +5%/day projection.
+- **Movement panel**: biggest gainers and losers over 1m, 5m, 15m, 1h, 6h and 24h, plus your own movement in each window.
+- **Lock screen**: the code is checked by the server, not the browser. Two codes: `ACCESS_CODE` can trade, `VIEW_CODE` (optional) is read-only, so friends can watch without being able to touch your account. Six wrong tries lock that IP for 15 minutes.
+- Three themes (Ember, Frost, Dune), desktop and phone layouts, daily report, threat radar.
 
-1. **Secrets** — repo → Settings → Secrets and variables → Actions → *New repository secret*, twice:
-   - `INVESTJA_USER`: your investja team login
-   - `INVESTJA_PASS`: your investja password
+## Deploy on Netlify
 
-   These are the only required settings. They have to be secrets because the repo is public.
-2. **Pages** — repo → Settings → Pages → Source: **GitHub Actions**.
-3. **First run** — Actions tab → *Scrape and deploy* → *Run workflow*. When both jobs are green the site is at `https://<user>.github.io/<repo>/`.
+1. Push this repo to GitHub, then Netlify → Add new site → Import from Git. `netlify.toml` sets the build (`npm run build`, publish `dist`, functions in `netlify/functions`).
+2. Site configuration → Environment variables:
 
-Optional, under Settings → Secrets and variables → Actions → *Variables*: `VITE_PIN` turns on the lock screen (off by default), and `VITE_TARGET_TEAM` overrides the highlighted team (defaults to `Rahman Power Squared`).
+   | Variable | |
+   |---|---|
+   | `INVESTJA_USER` | required: your investja team login |
+   | `INVESTJA_PASS` | required: your investja password |
+   | `ACCESS_CODE` | required: the owner code that unlocks trading |
+   | `VIEW_CODE` | optional: a read-only code for friends |
+   | `TARGET_TEAM` | optional (default `Rahman Power Squared`) |
 
-Every push to `main` also redeploys, so edits go live without waiting for the schedule. `vite.config.ts` reads the Pages base path from `VITE_BASE`, which the workflow sets to `/<repo-name>/`. No `gh-pages` branch is involved.
+3. Trigger deploy → Clear cache and deploy site. Open the site and enter your `ACCESS_CODE`.
+
+Check `https://<site>.netlify.app/api/health`: it should say `"configured":true`. The first dashboard load triggers a scrape; charts and movement windows fill in as the minute scheduler runs (the 24h window needs a day of data).
 
 ## Local development
 
 ```bash
 npm install
-npm run mock                      # fake investja.org on :4000 (leave running)
-BASE_URL=http://localhost:4000 INVESTJA_USER=1 INVESTJA_PASS=mock PREV_DATA=public/data.json npm run scrape
-# run the scrape a few times so the charts have points
-echo "VITE_PIN=1234" > .env.local
-npm run dev                       # http://localhost:5173
+cp .env.example .env        # fill in the values
+npm run dev                 # vite on :5173 + the functions on :8888 (proxied as /api)
 ```
 
-Against the real site: `INVESTJA_USER=... INVESTJA_PASS=... npm run scrape`.
-
-## What's in data.json
-
-`teams` (rank, name, school, equity, previous-run equity), your `portfolio`, a start-of-day `anchor` (the first scrape of each Eastern-time day, used for "Earned today" and the daily report) and 24 hours of `history` for your team and the top 20. The scraper reads the previous deployed `data.json` to carry the anchor and history forward, so charts exist even when nobody has the page open. Other teams you click in the leaderboard are recorded in your browser from then on.
-
-The scraper exits non-zero if login fails or the pages parse empty, so a bad run never overwrites good data (the site keeps the last deploy).
+To try it without touching investja.org: `npm run mock` (fake site on :4000) and set `BASE_URL=http://localhost:4000`, `INVESTJA_PASS=mock` in `.env`.
 
 ## Limitations
 
-- **Not real time.** GitHub's scheduler is best-effort and often runs minutes late. The top banner shows the last sync and turns amber after 15 minutes.
-- **Scheduled workflows pause** after 60 days without repo activity. Push any change, or re-enable it from the Actions tab.
-- **There is no real access control.** `data.json` is a public file (and the optional `VITE_PIN` lives in the JS bundle), so anyone who finds the URL can read it. It contains your cash, loan and holdings plus every team's name, school and equity. Share the link only with people you're fine showing that to.
-- **Selectors come from the spec, not the live site.** They were tested against a mock. If the first run fails with "parse incomplete" or "0 teams", check the Action log and adjust `scraper/parsers.js`.
-- **No trading.** Orders are not possible from this app.
-- **Daily report** is computed in your browser from the anchor, so it only generates for days you open the page after 4:05 PM ET. Buys and sells are inferred from changes in position size.
+- **Netlify usage.** Every poll and every minute tick is a function call, and the tick scrapes 2,525 rows. The page polls every 20 s while the tab is visible and stops while hidden. A few people leaving tabs open all day can use up the free plan.
+- **The scheduler.** The 1-minute schedule is a Netlify feature; if it is unavailable on your plan, `/api/live` refreshes the data itself whenever it is older than 2.5 minutes, but scheduled trades then only run while someone has the page open.
+- **Trading rules are the server's.** The terminal never tries to get around market hours (9:35–16:00 ET, weekdays), the 1-hour hold, the loan cap or the $25 fee. Orders it can't place come back as an error toast, or as "retrying" in Scheduled Trades.
+- **Selectors come from the spec, not the live site.** If the status banner says "parse incomplete" or "0 teams", check the function logs and adjust `server/parsers.js`.
+- **Buys and sells you make on investja.org directly** don't appear in the trade log, so the daily report's trade count only includes orders placed here.
+- **Sessions** last 12 hours; changing `ACCESS_CODE` or `INVESTJA_PASS` signs everyone out.

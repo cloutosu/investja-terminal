@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, Cell, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import type { Snapshot } from '../types';
-import { readSnapshots } from '../lib/db';
+import type { HistoryPoint } from '../types';
 import { useTheme } from '../lib/theme';
 
 export type ChartMode = 'equity' | 'earned';
@@ -14,8 +13,8 @@ const TICK_BARS = 36;
 
 interface Props {
   teamName: string;
+  history: HistoryPoint[];
   anchorEquity: number | null;
-  tick: number;
   mode: ChartMode;
   range: ChartRange;
   onScrub: (p: ChartPoint | null) => void;
@@ -41,16 +40,13 @@ function PulseDot({ cx, cy, color }: { cx?: number; cy?: number; color: string }
   );
 }
 
-export function EquityChart({ teamName, anchorEquity, tick, mode, range, onScrub }: Props) {
+export function EquityChart({ teamName, history, anchorEquity, mode, range, onScrub }: Props) {
   const { colors } = useTheme();
-  const [rows, setRows] = useState<Snapshot[]>([]);
   const [drawIn, setDrawIn] = useState(true);
-  const reqId = useRef(0);
-
-  useEffect(() => {
-    const id = ++reqId.current;
-    readSnapshots(teamName, Date.now() - RANGE_MS[range]).then((d) => { if (id === reqId.current) setRows(d); }).catch(() => {});
-  }, [teamName, range, tick]);
+  const rows = useMemo(() => {
+    const since = (history.at(-1)?.t ?? Date.now()) - RANGE_MS[range];
+    return history.filter((p) => p.t >= since && p.eq[teamName]).map((p) => ({ timestamp: p.t, equity: p.eq[teamName][0] }));
+  }, [history, teamName, range]);
 
   // draw-in only on first paint of a range; live updates after that must not re-animate the line
   useEffect(() => {
@@ -93,7 +89,7 @@ export function EquityChart({ teamName, anchorEquity, tick, mode, range, onScrub
   const gid = `eq-${up ? 'u' : 'd'}`;
 
   if (points.length < 2) {
-    return <div className="flex h-full items-center justify-center text-sm text-ink-3">Collecting ticks… the line starts drawing on the next poll.</div>;
+    return <div className="flex h-full items-center justify-center text-sm text-ink-3">Collecting ticks… the line starts drawing after a couple of minutes of data.</div>;
   }
 
   return (

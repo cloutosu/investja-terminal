@@ -8,12 +8,12 @@ import { useToast } from './Toaster';
 
 const REPORT_MINUTE = 16 * 60 + 5;
 
-interface Props { portfolio: Portfolio | null; equity: number | null; anchor: DayAnchor | null }
+interface Props { portfolio: Portfolio | null; equity: number | null; anchor: DayAnchor | null; trades: { buys: number; sells: number } | null }
 
 const prettyDate = (key: string) =>
   new Date(`${key}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
-export function DailyReport({ portfolio, equity, anchor }: Props) {
+export function DailyReport({ portfolio, equity, anchor, trades }: Props) {
   const toast = useToast();
   const [reports, setReports] = useState<DailyReportData[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -37,7 +37,8 @@ export function DailyReport({ portfolio, equity, anchor }: Props) {
     setBusy(true);
     try {
       const date = etDayKey();
-      const report = buildReport(date, anchor, equity, portfolio.holdings);
+      const built = buildReport(date, anchor, equity, portfolio.holdings);
+      const report = trades ? { ...built, buys: trades.buys, sells: trades.sells } : built; // exact counts from the server's trade log
       await db.dailyReports.where('date').equals(date).delete();
       await db.dailyReports.add(report);
       setSelected(date);
@@ -48,7 +49,7 @@ export function DailyReport({ portfolio, equity, anchor }: Props) {
       running.current = false;
       setBusy(false);
     }
-  }, [portfolio, equity, anchor, reload, toast]);
+  }, [portfolio, equity, anchor, trades, reload, toast]);
 
   // 16:05 ET on weekdays, once per day. Opening the app later that evening catches up.
   useEffect(() => {
@@ -92,7 +93,7 @@ export function DailyReport({ portfolio, equity, anchor }: Props) {
             Biggest drag:{' '}
             {report.biggestDrag ? <span className="text-ink">{report.biggestDrag.ticker} <span className="text-loss">({signedMoney(report.biggestDrag.amount)})</span></span> : '—'}
           </div>
-          <div className="text-ink-2">Position changes: {report.buys} buy{report.buys === 1 ? '' : 's'}, {report.sells} sell{report.sells === 1 ? '' : 's'}</div>
+          <div className="text-ink-2">Trades: {report.buys} buy{report.buys === 1 ? '' : 's'}, {report.sells} sell{report.sells === 1 ? '' : 's'}</div>
           <div className="mt-2 text-xs text-ink-3">{money(report.startEquity)} → {money(report.endEquity)}</div>
         </div>
       ) : (

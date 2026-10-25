@@ -16,15 +16,15 @@ const Row = memo(function Row({ team, isMe, animate, onOpen }: RowProps) {
   const d = team.deltaDollar;
   const cells = (
     <>
-      <td className="num w-14 pl-4 text-ink-3">{int(team.rank)}</td>
-      <td className="max-w-56 truncate pr-4 text-ink">
+      <td className="num w-9 pl-2 text-xs text-ink-3 sm:w-14 sm:pl-4 sm:text-[inherit]">{int(team.rank)}</td>
+      <td className="max-w-[8.5rem] truncate pr-2 text-ink sm:max-w-56 sm:pr-4">
         {team.name}
-        {isMe && <span className="num ml-2 rounded-full border px-2 py-px text-label text-accent-ink bg-accent border-transparent">YOU</span>}
+        {isMe && <span className="num ml-1.5 rounded-full border px-1.5 py-px text-label sm:ml-2 sm:px-2 text-accent-ink bg-accent border-transparent">YOU</span>}
       </td>
       <td className="hidden max-w-48 truncate pr-4 text-ink-3 md:table-cell">{team.school}</td>
-      <td className="num pr-4 text-right text-ink">{money(team.equity)}</td>
-      <td className={`num pr-4 text-right ${tone(d)}`}>
-        {d === 0 ? '—' : `${d > 0 ? '▲' : '▼'} ${signedMoney(d, deltaDecimals(d))}`}
+      <td className="num pr-2 text-right text-xs text-ink sm:pr-4 sm:text-sm">{money(team.equity)}</td>
+      <td className={`num pr-1 text-right text-xs sm:pr-4 sm:text-sm ${tone(d)}`}>
+        {d === 0 ? '—' : <><span className="max-sm:hidden">{d > 0 ? '▲' : '▼'} </span>{signedMoney(d, deltaDecimals(d))}</>}
       </td>
     </>
   );
@@ -77,7 +77,7 @@ export function Leaderboard({ teams, myTeam, onOpenTeam }: Props) {
 
   return (
     <section className="card p-5 sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
           <h2 className="text-lg font-medium tracking-tight">Leaderboard</h2>
           <span className="num text-xs text-ink-3">{int(teams.length)} teams</span>
@@ -91,11 +91,11 @@ export function Leaderboard({ teams, myTeam, onOpenTeam }: Props) {
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10 bg-elevated">
             <tr>
-              <Th label="Rank" k="rank" sort={sort} dir={dir} onSort={onSort} className="pl-4" />
+              <Th label="#" k="rank" sort={sort} dir={dir} onSort={onSort} className="pl-2 sm:pl-4" />
               <Th label="Team" sort={sort} dir={dir} onSort={onSort} className="pl-2" />
               <Th label="School" sort={sort} dir={dir} onSort={onSort} className="hidden md:table-cell" />
-              <Th label="Equity" k="equity" sort={sort} dir={dir} onSort={onSort} className="pr-4 text-right" />
-              <Th label="Delta" k="delta" sort={sort} dir={dir} onSort={onSort} className="pr-4 text-right" />
+              <Th label="Equity" k="equity" sort={sort} dir={dir} onSort={onSort} className="pr-2 text-right sm:pr-4" />
+              <Th label="Delta" k="delta" sort={sort} dir={dir} onSort={onSort} className="pr-1 text-right sm:pr-4" />
             </tr>
           </thead>
           <tbody>

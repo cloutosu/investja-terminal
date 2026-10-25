@@ -1,75 +1,81 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion, useAnimation } from 'framer-motion';
-import { Check, Delete } from 'lucide-react';
+import { Check, CornerDownLeft, Delete } from 'lucide-react';
+import type { Role } from '../types';
+import { api, session } from '../lib/api';
 
-const PIN = import.meta.env.VITE_PIN ?? ''; // no fallback: the repo is public
 const TEAM = import.meta.env.VITE_TARGET_TEAM || 'Rahman Power Squared';
-const MAX_ATTEMPTS = 5;
-const ATTEMPT_KEY = 'investja.pin.attempts';
+const MAX_LEN = 12;
+const MIN_BOXES = 5;
 const STEP_MS = 400;
 
-const STEPS = [
-  'Authenticating credentials...',
-  `Verifying PIN [${PIN}]...`,
-  'Logging in to Invest JA session...',
-  'Synchronizing Dexie ledger...',
-  `Welcome, ${TEAM}`,
-];
-
-const readAttempts = () => {
-  try { return Number(sessionStorage.getItem(ATTEMPT_KEY) || 0); } catch { return 0; }
-};
-
-export function PinAuth({ onUnlock }: { onUnlock: () => void }) {
-  const [digits, setDigits] = useState('');
-  const [attempts, setAttempts] = useState(readAttempts);
-  const [stage, setStage] = useState<'entry' | 'sequence'>('entry');
+export function PinAuth({ onUnlock }: { onUnlock: (role: Role) => void }) {
+  const [code, setCode] = useState('');
+  const [stage, setStage] = useState<'entry' | 'checking' | 'sequence'>('entry');
+  const [message, setMessage] = useState('');
+  const [role, setRole] = useState<Role>('owner');
   const [shown, setShown] = useState(0);
   const [barFull, setBarFull] = useState(false);
   const shake = useAnimation();
-  const locked = attempts >= MAX_ATTEMPTS || !PIN;
+
+  const steps = [
+    'Authenticating credentials...',
+    'Verifying access code...',
+    `Access level: ${role}`,
+    'Synchronizing ledger...',
+    `Welcome, ${TEAM}`,
+  ];
 
   const press = useCallback((d: string) => {
-    if (locked || stage !== 'entry') return;
-    setDigits((cur) => (cur.length < PIN.length ? cur + d : cur));
-  }, [locked, stage]);
-  const back = useCallback(() => setDigits((c) => c.slice(0, -1)), []);
+    if (stage !== 'entry') return;
+    setMessage('');
+    setCode((c) => (c.length < MAX_LEN ? c + d : c));
+  }, [stage]);
+  const back = useCallback(() => setCode((c) => c.slice(0, -1)), []);
 
-  useEffect(() => {
-    if (digits.length !== PIN.length || stage !== 'entry' || locked) return;
-    if (digits === PIN) {
-      setStage('sequence');
-      return;
+  const submit = useCallback(async () => {
+    if (stage !== 'entry' || !code) return;
+    setStage('checking');
+    try {
+      const r = await api.auth(code);
+      if (r.token && r.role) {
+        session.set(r.token, r.role);
+        setRole(r.role);
+        setStage('sequence');
+        return;
+      }
+      setMessage(r.message || 'Incorrect code.');
+    } catch (e) {
+      setMessage((e as Error).message || 'Could not reach the server.');
     }
-    const next = attempts + 1;
-    setAttempts(next);
-    try { sessionStorage.setItem(ATTEMPT_KEY, String(next)); } catch { /* storage blocked */ }
     void shake.start({ x: [0, -8, 8, -8, 0], transition: { duration: 0.3 } });
-    setDigits('');
-  }, [digits, stage, locked, attempts, shake]);
+    setCode('');
+    setStage('entry');
+  }, [code, stage, shake]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (/^[0-9]$/.test(e.key)) press(e.key);
       else if (e.key === 'Backspace') back();
+      else if (e.key === 'Enter') void submit();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [press, back]);
+  }, [press, back, submit]);
 
   useEffect(() => {
     if (stage !== 'sequence') return;
-    const id = setInterval(() => setShown((n) => Math.min(n + 1, STEPS.length)), STEP_MS);
+    const id = setInterval(() => setShown((n) => Math.min(n + 1, steps.length)), STEP_MS);
     return () => clearInterval(id);
-  }, [stage]);
+  }, [stage, steps.length]);
 
   useEffect(() => {
-    if (shown < STEPS.length) return;
+    if (shown < steps.length) return;
     const t = setTimeout(() => setBarFull(true), STEP_MS / 2);
     return () => clearTimeout(t);
-  }, [shown]);
+  }, [shown, steps.length]);
 
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  const boxes = Math.max(MIN_BOXES, code.length);
 
   return (
     <motion.div
@@ -81,51 +87,40 @@ export function PinAuth({ onUnlock }: { onUnlock: () => void }) {
       <div className="ambient" />
       <motion.div animate={shake} className="relative z-10 w-full max-w-sm rounded-[32px] border border-line-strong bg-elevated p-8 shadow-2xl shadow-black/30">
         <div className="label mb-1">InvestJA Terminal</div>
-        <h1 className="mb-8 text-2xl font-medium tracking-tight">
-          {locked ? (PIN ? 'TERMINAL LOCKED.' : 'VITE_PIN not set') : stage === 'sequence' ? 'Access granted' : 'Enter PIN'}
-        </h1>
+        <h1 className="mb-8 text-2xl font-medium tracking-tight">{stage === 'sequence' ? 'Access granted' : 'Enter access code'}</h1>
 
-        {stage === 'entry' && (
+        {stage !== 'sequence' && (
           <>
-            <div className="mb-3 flex justify-between gap-2">
-              {Array.from({ length: PIN.length }, (_, i) => (
+            <div className="mb-3 flex justify-center gap-2">
+              {Array.from({ length: boxes }, (_, i) => (
                 <div
                   key={i}
-                  className={`num flex h-14 flex-1 items-center justify-center rounded-2xl border bg-tint text-lg ${
-                    i === digits.length && !locked ? 'border-line-focus' : 'border-line-strong'
-                  }`}
+                  className={`num flex h-14 min-w-0 flex-1 items-center justify-center rounded-2xl border bg-tint text-lg transition-colors ${i === code.length ? 'border-line-focus' : 'border-line-strong'}`}
                 >
-                  {digits[i] ? '•' : ''}
+                  {code[i] ? '•' : ''}
                 </div>
               ))}
             </div>
-            <div className="num mb-6 min-h-4 text-xs text-ink-3">
-              {!PIN ? 'Set VITE_PIN in your host env vars, then redeploy.' : locked ? 'Too many failed attempts.' : attempts > 0 ? `Incorrect PIN. ${MAX_ATTEMPTS - attempts} left.` : ''}
-            </div>
+            <div className="num mb-5 min-h-8 text-xs text-ink-3">{stage === 'checking' ? 'Checking...' : message}</div>
             <div className="grid grid-cols-3 gap-2">
-              {keys.map((k) => (
-                <button key={k} disabled={locked} onClick={() => press(k)} className="btn num h-14 !rounded-full text-[1rem]">{k}</button>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((k) => (
+                <button key={k} disabled={stage !== 'entry'} onClick={() => press(k)} className="btn num h-14 !rounded-full text-[1rem]">{k}</button>
               ))}
-              <button disabled={locked} onClick={() => setDigits('')} className="btn h-14 !rounded-full">Clear</button>
-              <button disabled={locked} onClick={() => press('0')} className="btn num h-14 !rounded-full text-[1rem]">0</button>
-              <button disabled={locked} onClick={back} aria-label="Backspace" className="btn flex h-14 items-center justify-center !rounded-full">
-                <Delete size={16} />
-              </button>
+              <button disabled={stage !== 'entry'} onClick={() => setCode('')} className="btn h-14 !rounded-full">Clear</button>
+              <button disabled={stage !== 'entry'} onClick={() => press('0')} className="btn num h-14 !rounded-full text-[1rem]">0</button>
+              <button disabled={stage !== 'entry'} onClick={back} aria-label="Backspace" className="btn flex h-14 items-center justify-center !rounded-full"><Delete size={16} /></button>
             </div>
+            <button disabled={stage !== 'entry' || !code} onClick={() => void submit()} className="btn-primary mt-3 flex h-12 w-full items-center justify-center gap-2 disabled:opacity-40">
+              Unlock <CornerDownLeft size={14} />
+            </button>
           </>
         )}
 
         {stage === 'sequence' && (
           <div>
             <ul className="num mb-6 flex flex-col gap-2 text-xs">
-              {STEPS.slice(0, shown).map((line, i) => (
-                <motion.li
-                  key={line}
-                  className="flex items-center gap-3 text-ink-2"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
+              {steps.slice(0, shown).map((line, i) => (
+                <motion.li key={line} className="flex items-center gap-3 text-ink-2" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}>
                   <span className="text-ink-3">{String(i + 1).padStart(2, '0')}</span>
                   <span className="flex-1">{line}</span>
                   <Check size={14} className="text-gain" />
@@ -138,7 +133,7 @@ export function PinAuth({ onUnlock }: { onUnlock: () => void }) {
                 initial={{ width: '0%' }}
                 animate={{ width: barFull ? '100%' : '0%' }}
                 transition={{ duration: 0.8, ease: 'linear' }}
-                onAnimationComplete={() => barFull && onUnlock()}
+                onAnimationComplete={() => barFull && onUnlock(role)}
               />
             </div>
           </div>

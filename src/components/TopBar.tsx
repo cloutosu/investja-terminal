@@ -20,7 +20,7 @@ interface Props {
   marketOpen: boolean;
   pulse: Pulse | null;
   tick: number;
-  onLock: () => void;
+  onLock?: () => void;
 }
 
 const MAX_LOAN = 50000;
@@ -106,7 +106,7 @@ export function TopBar({ teamName, equity, dayDelta, anchorEquity, cash, loan, p
             {marketOpen ? 'MARKET OPEN' : 'MARKET CLOSED'}
           </span>
           <ThemeDots />
-          <button onClick={onLock} aria-label="Lock terminal" className="btn hidden items-center gap-2 lg:flex"><Lock size={13} />Lock</button>
+          {onLock && <button onClick={onLock} aria-label="Lock terminal" className="btn hidden items-center gap-2 lg:flex"><Lock size={13} />Lock</button>}
         </div>
       </div>
 

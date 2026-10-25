@@ -16,6 +16,7 @@ import { DailyReport } from './components/DailyReport';
 
 const TARGET_TEAM = import.meta.env.VITE_TARGET_TEAM || 'Rahman Power Squared';
 const AUTH_KEY = 'investja.auth';
+const HAS_PIN = !!import.meta.env.VITE_PIN; // no PIN configured = no lock screen
 const POLL_MS = 60_000;
 const PULSE_MS = 3000;
 const STALE_MS = 15 * 60_000; // GitHub's scheduler regularly runs late; past this we say so
@@ -42,6 +43,7 @@ const ago = (ms: number) => {
 
 export default function App() {
   const [authed, setAuthed] = useState(() => {
+    if (!HAS_PIN) return true;
     try { return sessionStorage.getItem(AUTH_KEY) === '1'; } catch { return false; }
   });
   const prevEquitiesRef = useRef<Map<string, number>>(new Map());
@@ -175,7 +177,7 @@ export default function App() {
               marketOpen={isMarketOpen(now)}
               pulse={pulse}
               tick={tick}
-              onLock={lock}
+              onLock={HAS_PIN ? lock : undefined}
             />
           </div>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
@@ -188,7 +190,7 @@ export default function App() {
               <div className={show('report')}><DailyReport portfolio={portfolio} equity={equity} anchor={anchor} /></div>
             </div>
           </div>
-          <BottomNav tab={tab} onTab={setTab} onLock={lock} />
+          <BottomNav tab={tab} onTab={setTab} onLock={HAS_PIN ? lock : undefined} />
         </motion.div>
       )}
 

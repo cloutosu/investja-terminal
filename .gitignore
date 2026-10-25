@@ -5,3 +5,4 @@ dist
 scheduled-trades.json
 trades-log.json
 *.tmp
+*.zip

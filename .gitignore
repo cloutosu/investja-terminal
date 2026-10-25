@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.local
+scheduled-trades.json
+trades-log.json
+*.tmp

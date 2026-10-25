@@ -1,0 +1,133 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-base: var(--bg);
+  --color-elevated: var(--surface);
+  --color-elevated-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-line-focus: var(--line-focus);
+  --color-tint: var(--tint);
+  --color-tint-2: var(--tint-2);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --color-warn: var(--warn);
+}
+
+@theme {
+  --text-label: 11px;
+  --text-label--line-height: 1.4;
+  --text-hero: clamp(2.5rem, 9vw, 4.25rem);
+  --text-hero--line-height: 1;
+}
+
+/* Ember: dark, orange glow */
+:root, [data-theme='ember'] {
+  color-scheme: dark;
+  --bg: #0b0608; --surface: #140b0d; --surface-2: #1c1013;
+  --ink: #f7ede8; --ink-2: #b8a59d; --ink-3: #78645e;
+  --line: rgb(255 232 220 / 0.07); --line-strong: rgb(255 232 220 / 0.13); --line-focus: rgb(255 232 220 / 0.28);
+  --tint: rgb(255 232 220 / 0.045); --tint-2: rgb(255 232 220 / 0.09);
+  --accent: #f26b1d; --accent-ink: #190a04; --on-color: #120905;
+  --gain: #3ddc97; --loss: #ff5a5f; --warn: #ffb020;
+  --glow-a: rgb(242 107 29 / 0.34); --glow-b: rgb(170 40 25 / 0.28);
+}
+/* Frost: light glass */
+[data-theme='frost'] {
+  color-scheme: light;
+  --bg: #e4e8eb; --surface: #f4f6f7; --surface-2: #ffffff;
+  --ink: #14191b; --ink-2: #566066; --ink-3: #8f9a9f;
+  --line: rgb(20 25 27 / 0.07); --line-strong: rgb(20 25 27 / 0.12); --line-focus: rgb(20 25 27 / 0.3);
+  --tint: rgb(20 25 27 / 0.04); --tint-2: rgb(20 25 27 / 0.08);
+  --accent: #1a2123; --accent-ink: #ffffff; --on-color: #ffffff;
+  --gain: #12906a; --loss: #d1453f; --warn: #b87a0a;
+  --glow-a: rgb(255 255 255 / 0.95); --glow-b: rgb(140 158 170 / 0.35);
+}
+/* Dune: warm cream */
+[data-theme='dune'] {
+  color-scheme: light;
+  --bg: #f5e9e4; --surface: #fbf4f0; --surface-2: #fffaf7;
+  --ink: #2a170f; --ink-2: #7b6359; --ink-3: #b39f95;
+  --line: rgb(42 23 15 / 0.08); --line-strong: rgb(42 23 15 / 0.13); --line-focus: rgb(42 23 15 / 0.3);
+  --tint: rgb(42 23 15 / 0.045); --tint-2: rgb(42 23 15 / 0.09);
+  --accent: #2a130c; --accent-ink: #fbefe8; --on-color: #ffffff;
+  --gain: #3f8f4f; --loss: #b6403c; --warn: #b0741a;
+  --glow-a: rgb(232 190 150 / 0.65); --glow-b: rgb(244 214 205 / 0.7);
+}
+
+@layer base {
+  html, body, #root { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 400ms, color 400ms;
+  }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  input, select, button { font: inherit; color: inherit; }
+  ::selection { background: var(--tint-2); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+@layer components {
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum' 1, 'zero' 1; }
+  /* big proportional numerals, tabular so the digits don't jitter while they tween */
+  .numx { font-feature-settings: 'tnum' 1, 'zero' 1; letter-spacing: -0.035em; font-weight: 500; }
+  .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; }
+  .field {
+    background: var(--tint); border: 1px solid var(--line-strong); border-radius: 14px;
+    padding: 0.7rem 0.9rem; outline: none; width: 100%; transition: border-color 150ms;
+  }
+  .field:focus { border-color: var(--line-focus); }
+  .btn {
+    border: 1px solid var(--line-strong); border-radius: 999px; padding: 0.4rem 0.9rem;
+    font-size: 13px; color: var(--ink-2); transition: color 150ms, border-color 150ms, background-color 150ms;
+  }
+  .btn:hover:not(:disabled) { color: var(--ink); border-color: var(--line-focus); background: var(--tint); }
+  .btn:disabled { opacity: 0.4; }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0.5rem 1rem;
+    font-size: 13px; font-weight: 500; transition: transform 150ms, filter 150ms;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:active { transform: scale(0.97); }
+}
+
+.ambient {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+}
+.ambient::before, .ambient::after {
+  content: ''; position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(60px);
+}
+.ambient::before { right: -25vmax; top: -30vmax; background: radial-gradient(closest-side, var(--glow-a), transparent); animation: drift 28s ease-in-out infinite alternate; }
+.ambient::after { left: -30vmax; bottom: -35vmax; background: radial-gradient(closest-side, var(--glow-b), transparent); animation: drift 34s ease-in-out infinite alternate-reverse; }
+@keyframes drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-4vmax, 3vmax, 0) scale(1.08); } }
+
+@keyframes chev { 0% { opacity: 0.25; transform: translateX(-3px); } 50% { opacity: 1; } 100% { opacity: 0.25; transform: translateX(3px); } }
+.chev { animation: chev 1.4s ease-in-out infinite; }
+@keyframes orb { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 0 10px transparent; } }
+.orb { animation: orb 2.4s ease-out infinite; }
+@keyframes sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sheen-text {
+  background: linear-gradient(100deg, var(--ink-3) 35%, var(--ink) 50%, var(--ink-3) 65%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sheen 3.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient::before, .ambient::after, .chev, .orb, .sheen-text { animation: none; }
+}
